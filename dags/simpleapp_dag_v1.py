@@ -9,7 +9,7 @@ from google import auth
 from google.auth import impersonated_credentials
 from google.auth.transport.requests import Request
 
-DEFAULT_ARGS = {"owner": "Tobias Lindert", "email": "tobias.lindert@factor-a.com", "retries": 0}
+DEFAULT_ARGS = {"owner": "Tobias Lindert", "retries": 0}
 
 TAGS = ["cloudrun", "gcp", "containers"]
 DESCRIPTION = "DAG for testing CloudRun Jobs"
@@ -17,10 +17,10 @@ DESCRIPTION = "DAG for testing CloudRun Jobs"
 REGION = Variable.get("gcp_region", default_var=None)
 PROJECT = Variable.get("gcp_project", default_var=None)
 IMPERSONATION = Variable.get("cloudrun_impersonation", default_var=None)
-APP = "currencyupdate"
+APP = "simpleapp"
 
 
-def _get_credentials(impersonation: str) -> str:
+def _get_credentials(impersonation: str = None) -> str:
     """
     Retrieves the gcp credentials either from the default auth
     or uses impersonation if the impersonation parameter is present
@@ -32,7 +32,7 @@ def _get_credentials(impersonation: str) -> str:
     """
     credentials, _ = auth.default()
 
-    if impersonation is not None:
+    if impersonation:
         target_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
 
         credentials = impersonated_credentials.Credentials(
@@ -45,16 +45,14 @@ def _get_credentials(impersonation: str) -> str:
     credentials.refresh(Request())
     return credentials.token
 
-
 def _gen_header(access_token: str) -> dict:
     return {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {access_token}",
     }
 
-
 @dag(
-    dag_id="currencyupdate_dag_v2",
+    dag_id="simpleapp_dag_v1",
     schedule_interval=None,
     start_date=datetime(2022, 8, 17),
     default_args=DEFAULT_ARGS,
@@ -113,12 +111,12 @@ def run_dag():
                 print(r.json()["status"]["logUri"])
                 raise AirflowFailException("CloudRun Job Failed")
             elif status == "True":
+                print(f"CloudRun Job Execution {execution_id} successfully ")
                 break
             else:
                 raise AirflowFailException("unknown status")
 
     execution_id = start_cloudrun_execution(job_name=APP, impersonation=IMPERSONATION)
     check_cloudrun_execution(execution_id=execution_id, impersonation=IMPERSONATION)
-
 
 start = run_dag()
